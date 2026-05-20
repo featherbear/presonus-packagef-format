@@ -1,0 +1,531 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>PreSonus .skin viewer</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+  :root {
+    --bg: #1e1e22;
+    --panel: #26262c;
+    --panel2: #2d2d34;
+    --fg: #e6e6e6;
+    --muted: #9aa0a6;
+    --accent: #6aa9ff;
+    --accent2: #ffb86b;
+    --border: #3a3a42;
+    --error: #ff6b6b;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg); }
+  body { display: flex; flex-direction: column; }
+  header {
+    padding: 10px 16px; border-bottom: 1px solid var(--border);
+    display: flex; gap: 16px; align-items: center; flex-wrap: wrap;
+    background: var(--panel);
+  }
+  header h1 { margin: 0; font-size: 16px; font-weight: 600; }
+  header .info { color: var(--muted); font-size: 13px; }
+  header .actions { margin-left: auto; display: flex; gap: 8px; }
+  button, label.btn {
+    background: var(--panel2); color: var(--fg);
+    border: 1px solid var(--border); border-radius: 6px;
+    padding: 6px 12px; font-size: 13px; cursor: pointer;
+  }
+  button:hover, label.btn:hover { border-color: var(--accent); }
+  button:disabled { opacity: 0.4; cursor: not-allowed; }
+  input[type=file] { display: none; }
+
+  #drop {
+    flex: 1;
+    display: flex; align-items: center; justify-content: center;
+    border: 2px dashed var(--border);
+    margin: 24px;
+    border-radius: 12px;
+    color: var(--muted);
+    text-align: center;
+    transition: border-color .15s, background .15s;
+  }
+  #drop.over { border-color: var(--accent); background: #2a2f3a; color: var(--fg); }
+  #drop p { margin: 8px 0; }
+
+  #main { flex: 1; display: none; min-height: 0; }
+  #main.show { display: flex; }
+
+  #tree {
+    width: 380px; min-width: 240px; max-width: 60%;
+    overflow: auto; border-right: 1px solid var(--border);
+    padding: 8px 0; font-size: 13px;
+    background: var(--panel);
+    resize: horizontal;
+  }
+  #preview {
+    flex: 1; overflow: auto;
+    display: flex; flex-direction: column;
+    min-width: 0;
+  }
+  #preview .head {
+    padding: 10px 16px; border-bottom: 1px solid var(--border);
+    background: var(--panel); display: flex; gap: 16px; align-items: center;
+    flex-wrap: wrap;
+  }
+  #preview .head .name { font-weight: 600; word-break: break-all; }
+  #preview .head .meta { color: var(--muted); font-size: 12px; }
+  #preview .body { flex: 1; overflow: auto; padding: 16px; }
+  #preview .body img, #preview .body svg { max-width: 100%; max-height: 100%; }
+  #preview .body pre {
+    margin: 0; font: 12px/1.4 ui-monospace, "Menlo", "Consolas", monospace;
+    white-space: pre-wrap; word-break: break-all;
+  }
+  #preview .body .hex {
+    font: 12px/1.4 ui-monospace, "Menlo", "Consolas", monospace;
+    white-space: pre;
+  }
+  #preview .placeholder { color: var(--muted); padding: 24px; }
+
+  ul.tree, ul.tree ul { list-style: none; margin: 0; padding-left: 16px; }
+  li.dir > .row::before { content: "▸ "; color: var(--muted); }
+  li.dir.open > .row::before { content: "▾ "; color: var(--muted); }
+  li.file > .row::before { content: "  "; }
+  li > .row {
+    cursor: pointer; padding: 2px 8px; user-select: none;
+    border-radius: 4px;
+    display: flex; gap: 8px; align-items: baseline;
+  }
+  li > .row:hover { background: var(--panel2); }
+  li > .row.selected { background: #314970; color: #fff; }
+  li > .row .sz { color: var(--muted); font-size: 11px; margin-left: auto; }
+  li.dir > ul { display: none; }
+  li.dir.open > ul { display: block; }
+
+  .err { color: var(--error); padding: 16px; }
+</style>
+
+<header>
+  <h1>PreSonus .skin viewer</h1>
+  <span id="fileinfo" class="info"></span>
+  <div class="actions">
+    <label class="btn" for="filepick">Open .skin…</label>
+    <input id="filepick" type="file" accept=".skin">
+    <button id="zipbtn" disabled>Download all as .zip</button>
+  </div>
+</header>
+
+<div id="drop">
+  <div>
+    <p style="font-size:18px;color:var(--fg);">Drop a <code>.skin</code> file here</p>
+    <p>or use the <strong>Open</strong> button above</p>
+    <p style="font-size:12px;">Everything happens locally in your browser — nothing is uploaded.</p>
+  </div>
+</div>
+
+<div id="main">
+  <div id="tree"></div>
+  <div id="preview">
+    <div class="placeholder">Select a file in the tree to preview it.</div>
+  </div>
+</div>
+
+<!-- JSZip via CDN, only needed for "Download all as zip" -->
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+
+<script>
+"use strict";
+
+// ---------- Parser ---------------------------------------------------------
+// Format: [8 byte "PACKAGEF"][zlib streams][index][64 byte trailer]
+// Trailer: u64 index_off, u64 index_size, 16 reserved, 16 sig,
+//          u32 version, u32 trailer_size, "PACKAGEF"
+//
+// Index entries: tag(4) "Root"|"Fold"|"File"
+//   Root  : flags(u32), num_children(u32), children...
+//   Fold  : flags(u32), utf16z name, num_children(u32), children...
+//   File  : flags(u32), utf16z name, ts(8), reserved(u8),
+//           offset(u64), csize(u64), dsize(u64)
+
+const MAGIC = "PACKAGEF";
+const TRAILER_SIZE = 0x40;
+
+class Reader {
+  constructor(buf, p = 0) {
+    this.dv = new DataView(buf);
+    this.u8 = new Uint8Array(buf);
+    this.p = p;
+  }
+  ascii(n) {
+    let s = "";
+    for (let i = 0; i < n; i++) s += String.fromCharCode(this.u8[this.p + i]);
+    this.p += n;
+    return s;
+  }
+  u8r() { return this.u8[this.p++]; }
+  u32() { const v = this.dv.getUint32(this.p, true); this.p += 4; return v; }
+  // JS doesn't have u64; values fit in Number for any realistic file.
+  u64() {
+    const lo = this.dv.getUint32(this.p, true);
+    const hi = this.dv.getUint32(this.p + 4, true);
+    this.p += 8;
+    return hi * 0x100000000 + lo;
+  }
+  bytes(n) { const v = this.u8.subarray(this.p, this.p + n); this.p += n; return v; }
+  utf16z() {
+    const start = this.p;
+    while (this.dv.getUint16(this.p, true) !== 0) this.p += 2;
+    const end = this.p;
+    this.p += 2; // skip terminator
+    const slice = this.u8.subarray(start, end);
+    return new TextDecoder("utf-16le").decode(slice);
+  }
+}
+
+function parseTimestamp(b) {
+  // year:u16, mon:u8, day:u8, hr:u8, min:u8, sec:u8, ?:u8
+  const dv = new DataView(b.buffer, b.byteOffset, b.byteLength);
+  const year = dv.getUint16(0, true);
+  const mon = b[2], day = b[3], hr = b[4], mi = b[5], sc = b[6];
+  const pad = n => String(n).padStart(2, "0");
+  return `${year}-${pad(mon)}-${pad(day)} ${pad(hr)}:${pad(mi)}:${pad(sc)}`;
+}
+
+function parseSkin(buf) {
+  if (buf.byteLength < 8 + TRAILER_SIZE) throw new Error("File too small");
+  const r = new Reader(buf);
+  if (r.ascii(8) !== MAGIC) throw new Error("Not a PACKAGEF file (bad header magic)");
+
+  // Trailer
+  const t = new Reader(buf, buf.byteLength - TRAILER_SIZE);
+  const indexOffset = t.u64();
+  const indexSize   = t.u64();
+  t.bytes(16);                      // reserved
+  const signature = Array.from(t.bytes(16))
+    .map(b => b.toString(16).padStart(2, "0")).join("");
+  const version      = t.u32();
+  const trailerSize  = t.u32();
+  const trailingMagic = t.ascii(8);
+  if (trailingMagic !== MAGIC) throw new Error("Bad trailing magic");
+
+  // Root entry
+  const ix = new Reader(buf, indexOffset);
+  if (ix.ascii(4) !== "Root") throw new Error("Expected Root marker");
+  const rootFlags = ix.u32();
+  const rootCount = ix.u32();
+
+  function parseEntries(n) {
+    const out = [];
+    for (let i = 0; i < n; i++) {
+      const tag = ix.ascii(4);
+      const flags = ix.u32();
+      const name = ix.utf16z();
+      if (tag === "File") {
+        const ts = parseTimestamp(ix.bytes(8));
+        const reserved = ix.u8r();
+        const offset = ix.u64();
+        const csize  = ix.u64();
+        const dsize  = ix.u64();
+        out.push({ kind: "file", name, flags, timestamp: ts, reserved,
+                   offset, csize, dsize });
+      } else if (tag === "Fold") {
+        const childCount = ix.u32();
+        out.push({ kind: "dir", name, flags, children: parseEntries(childCount) });
+      } else {
+        throw new Error(`Unknown entry tag '${tag}' at index offset 0x${(ix.p-12).toString(16)}`);
+      }
+    }
+    return out;
+  }
+
+  const root = { kind: "dir", name: "", flags: rootFlags,
+                 children: parseEntries(rootCount) };
+
+  return {
+    root,
+    trailer: { indexOffset, indexSize, signature, version, trailerSize },
+    fileSize: buf.byteLength,
+    raw: new Uint8Array(buf),
+  };
+}
+
+// ---------- Decompression --------------------------------------------------
+// Use the browser's native DecompressionStream('deflate') which handles
+// zlib-wrapped streams (RFC 1950).
+async function decompressZlib(bytes) {
+  const cs = new DecompressionStream("deflate");
+  const stream = new Blob([bytes]).stream().pipeThrough(cs);
+  const ab = await new Response(stream).arrayBuffer();
+  return new Uint8Array(ab);
+}
+
+async function readFileBytes(pkg, entry) {
+  const slice = pkg.raw.subarray(entry.offset, entry.offset + entry.csize);
+  const out = await decompressZlib(slice);
+  if (out.length !== entry.dsize) {
+    console.warn(`size mismatch for ${entry.name}: got ${out.length}, expected ${entry.dsize}`);
+  }
+  return out;
+}
+
+// ---------- UI -------------------------------------------------------------
+
+const els = {
+  drop: document.getElementById("drop"),
+  main: document.getElementById("main"),
+  tree: document.getElementById("tree"),
+  preview: document.getElementById("preview"),
+  filepick: document.getElementById("filepick"),
+  zipbtn: document.getElementById("zipbtn"),
+  fileinfo: document.getElementById("fileinfo"),
+};
+
+let pkg = null;
+let pkgName = "";
+let selected = null;
+
+function fmtSize(n) {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n/1024).toFixed(1)} KB`;
+  return `${(n/1024/1024).toFixed(2)} MB`;
+}
+
+function buildTree(node, parentPath = "") {
+  const ul = document.createElement("ul");
+  ul.className = "tree";
+  const children = [...node.children].sort((a, b) => {
+    if (a.kind !== b.kind) return a.kind === "dir" ? -1 : 1;
+    return a.name.localeCompare(b.name);
+  });
+  for (const c of children) {
+    const li = document.createElement("li");
+    li.className = c.kind;
+    const row = document.createElement("div");
+    row.className = "row";
+    const label = document.createElement("span");
+    label.textContent = c.name;
+    row.appendChild(label);
+    li.appendChild(row);
+
+    if (c.kind === "dir") {
+      row.addEventListener("click", e => {
+        e.stopPropagation();
+        li.classList.toggle("open");
+      });
+      const sub = buildTree(c, parentPath + c.name + "/");
+      li.appendChild(sub);
+    } else {
+      const fullPath = parentPath + c.name;
+      const sz = document.createElement("span");
+      sz.className = "sz";
+      sz.textContent = fmtSize(c.dsize);
+      row.appendChild(sz);
+      row.addEventListener("click", () => selectFile(c, fullPath, row));
+    }
+    ul.appendChild(li);
+  }
+  return ul;
+}
+
+function* walk(node, prefix = "") {
+  for (const c of node.children) {
+    if (c.kind === "file") yield { path: prefix + c.name, entry: c };
+    else yield* walk(c, prefix + c.name + "/");
+  }
+}
+
+async function selectFile(entry, path, rowEl) {
+  if (selected) selected.classList.remove("selected");
+  rowEl.classList.add("selected");
+  selected = rowEl;
+
+  const head = document.createElement("div");
+  head.className = "head";
+  head.innerHTML = `
+    <span class="name"></span>
+    <span class="meta"></span>
+    <button id="dlbtn">Download</button>
+  `;
+  head.querySelector(".name").textContent = path;
+  head.querySelector(".meta").textContent =
+    `${fmtSize(entry.dsize)} (compressed ${fmtSize(entry.csize)}) · ${entry.timestamp}`;
+
+  const body = document.createElement("div");
+  body.className = "body";
+  body.textContent = "Decompressing…";
+
+  els.preview.replaceChildren(head, body);
+
+  let data;
+  try {
+    data = await readFileBytes(pkg, entry);
+  } catch (err) {
+    body.innerHTML = `<div class="err">Decompression failed: ${err.message}</div>`;
+    return;
+  }
+
+  head.querySelector("#dlbtn").addEventListener("click", () => {
+    triggerDownload(data, entry.name);
+  });
+
+  renderPreview(body, entry.name, data);
+}
+
+function renderPreview(body, name, data) {
+  const ext = name.toLowerCase().split(".").pop();
+  const isImage = ["png","jpg","jpeg","gif","webp","bmp","ico"].includes(ext);
+  const isSvg = ext === "svg";
+  const isText = ["xml","txt","json","html","htm","css","js","md","csv","ini","yaml","yml"].includes(ext);
+
+  body.innerHTML = "";
+
+  if (isImage) {
+    const blob = new Blob([data], { type: `image/${ext === "jpg" ? "jpeg" : ext}` });
+    const img = document.createElement("img");
+    img.src = URL.createObjectURL(blob);
+    img.onload = () => URL.revokeObjectURL(img.src);
+    body.appendChild(img);
+    return;
+  }
+  if (isSvg) {
+    // Render the SVG inline as an image via Blob URL (so internal refs work).
+    const blob = new Blob([data], { type: "image/svg+xml" });
+    const img = document.createElement("img");
+    img.src = URL.createObjectURL(blob);
+    img.onload = () => URL.revokeObjectURL(img.src);
+    body.appendChild(img);
+    return;
+  }
+  if (isText || looksLikeText(data)) {
+    const text = new TextDecoder("utf-8", { fatal: false }).decode(data);
+    const pre = document.createElement("pre");
+    pre.textContent = text;
+    body.appendChild(pre);
+    return;
+  }
+  // Hex dump fallback (first 4 KB to keep DOM cheap).
+  const pre = document.createElement("pre");
+  pre.className = "hex";
+  pre.textContent = hexDump(data.subarray(0, Math.min(data.length, 4096)));
+  if (data.length > 4096) {
+    pre.textContent += `\n… ${data.length - 4096} more bytes\n`;
+  }
+  body.appendChild(pre);
+}
+
+function looksLikeText(bytes) {
+  const n = Math.min(bytes.length, 512);
+  if (n === 0) return true;
+  let printable = 0;
+  for (let i = 0; i < n; i++) {
+    const b = bytes[i];
+    if (b === 9 || b === 10 || b === 13 || (b >= 32 && b < 127)) printable++;
+  }
+  return printable / n > 0.9;
+}
+
+function hexDump(bytes) {
+  const lines = [];
+  for (let i = 0; i < bytes.length; i += 16) {
+    const chunk = bytes.subarray(i, i + 16);
+    const hex = Array.from(chunk).map(b => b.toString(16).padStart(2, "0")).join(" ");
+    const ascii = Array.from(chunk).map(b => (b >= 32 && b < 127) ? String.fromCharCode(b) : ".").join("");
+    lines.push(i.toString(16).padStart(8, "0") + "  " + hex.padEnd(48, " ") + "  " + ascii);
+  }
+  return lines.join("\n");
+}
+
+function triggerDownload(data, filename) {
+  const blob = new Blob([data], { type: "application/octet-stream" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+
+async function downloadAllZip() {
+  if (!pkg) return;
+  els.zipbtn.disabled = true;
+  const oldText = els.zipbtn.textContent;
+  els.zipbtn.textContent = "Building zip…";
+  try {
+    const zip = new JSZip();
+    for (const { path, entry } of walk(pkg.root)) {
+      const data = await readFileBytes(pkg, entry);
+      zip.file(path, data);
+    }
+    const blob = await zip.generateAsync({ type: "blob" });
+    const base = pkgName.replace(/\.skin$/i, "") || "skin";
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = base + ".zip";
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 0);
+  } catch (err) {
+    alert("Failed to build zip: " + err.message);
+  } finally {
+    els.zipbtn.textContent = oldText;
+    els.zipbtn.disabled = false;
+  }
+}
+
+// ---------- Loading --------------------------------------------------------
+
+async function loadFile(file) {
+  pkgName = file.name;
+  els.fileinfo.textContent = "Parsing…";
+  try {
+    const buf = await file.arrayBuffer();
+    pkg = parseSkin(buf);
+  } catch (err) {
+    pkg = null;
+    els.fileinfo.textContent = "";
+    alert("Failed to parse: " + err.message);
+    return;
+  }
+  const fileCount = [...walk(pkg.root)].length;
+  els.fileinfo.textContent =
+    `${pkgName} · ${fmtSize(pkg.fileSize)} · ${fileCount} file(s) · ` +
+    `format v${pkg.trailer.version}`;
+
+  els.tree.replaceChildren(buildTree(pkg.root));
+  // Auto-open root level
+  for (const li of els.tree.querySelectorAll(":scope > ul > li.dir")) {
+    li.classList.add("open");
+  }
+  els.preview.replaceChildren(Object.assign(document.createElement("div"), {
+    className: "placeholder",
+    textContent: "Select a file in the tree to preview it.",
+  }));
+  els.drop.style.display = "none";
+  els.main.classList.add("show");
+  els.zipbtn.disabled = false;
+  selected = null;
+}
+
+els.filepick.addEventListener("change", e => {
+  const f = e.target.files[0];
+  if (f) loadFile(f);
+});
+
+["dragenter", "dragover"].forEach(ev =>
+  els.drop.addEventListener(ev, e => {
+    e.preventDefault(); els.drop.classList.add("over");
+  }));
+["dragleave", "drop"].forEach(ev =>
+  els.drop.addEventListener(ev, e => {
+    e.preventDefault(); els.drop.classList.remove("over");
+  }));
+els.drop.addEventListener("drop", e => {
+  const f = e.dataTransfer.files[0];
+  if (f) loadFile(f);
+});
+
+// Allow dropping anywhere once a file is loaded too
+window.addEventListener("dragover", e => e.preventDefault());
+window.addEventListener("drop", e => {
+  if (e.target.closest("#drop")) return; // handled above
+  e.preventDefault();
+  const f = e.dataTransfer.files[0];
+  if (f) loadFile(f);
+});
+
+els.zipbtn.addEventListener("click", downloadAllZip);
+</script>
+</html>
