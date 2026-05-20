@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { readFileBytes, type FileEntry } from "./lib/skin";
+  import { readFileBytes, type FileEntry } from "./lib/packagef";
 
   type Props = {
     path: string;

@@ -2,7 +2,7 @@
   import JSZip from "jszip";
   import Tree from "./Tree.svelte";
   import Preview from "./Preview.svelte";
-  import { parseSkin, readFileBytes, walk, type SkinPackage, type FileEntry } from "./lib/skin";
+  import { parseSkin, readFileBytes, walk, type SkinPackage, type FileEntry } from "./lib/packagef";
 
   let pkg = $state<SkinPackage | null>(null);
   let pkgName = $state("");

@@ -1,7 +1,7 @@
 <script lang="ts">
   import { untrack } from "svelte";
   import Tree from "./Tree.svelte";
-  import type { FolderEntry, FileEntry } from "./lib/skin";
+  import type { FolderEntry, FileEntry } from "./lib/packagef";
 
   type Props = {
     folder: FolderEntry;

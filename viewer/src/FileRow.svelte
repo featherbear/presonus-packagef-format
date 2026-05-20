@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { FileEntry } from "./lib/skin";
+  import type { FileEntry } from "./lib/packagef";
 
   type Props = {
     entry: FileEntry;

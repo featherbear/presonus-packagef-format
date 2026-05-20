@@ -90,7 +90,7 @@ def collect_files(root: Folder):
     return out
 
 
-def build_skin(root: Folder) -> bytes:
+def build_packagef(root: Folder) -> bytes:
     out = bytearray()
     out += MAGIC
 
@@ -173,7 +173,7 @@ def main() -> int:
         if len(sys.argv) > 1
         else os.path.join(os.path.dirname(__file__), "sample.skin")
     )
-    data = build_skin(sample_tree())
+    data = build_packagef(sample_tree())
     with open(out_path, "wb") as f:
         f.write(data)
     print(f"Wrote {out_path} ({len(data)} bytes, 5 files)")

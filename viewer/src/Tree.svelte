@@ -1,7 +1,7 @@
 <script lang="ts">
   import DirNode from "./DirNode.svelte";
   import FileRow from "./FileRow.svelte";
-  import type { FolderEntry, FileEntry, Entry } from "./lib/skin";
+  import type { FolderEntry, FileEntry, Entry } from "./lib/packagef";
 
   type Props = {
     folder: FolderEntry;
