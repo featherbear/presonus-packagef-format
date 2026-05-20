@@ -8,3 +8,6 @@ These `.skin` files are of a `PACKAGEF` format, whose structure is reverse-engin
 
 ---
 
+The `viewer/` directory contains a web application that implements the data structure.  
+It is available at http://featherbear.cc/presonus-packagef-format/
+

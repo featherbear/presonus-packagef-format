@@ -26,7 +26,7 @@ pnpm test       # Playwright end-to-end tests
 ## Regenerating the Kaitai parser
 
 The format is described in the repository root, at `presonus_packagef.ksy`.  
-The generated JavaScript parser is committed at `src/lib/kaitai/PresonusPackagef.js`.  
+A pre-generated JavaScript parser is committed at `src/lib/kaitai/PresonusPackagef.js`.  
 
 To regenerate after editing the spec:
 

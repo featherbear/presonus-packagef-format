@@ -6,7 +6,9 @@ const DEV_PORT = 4322;
 export default defineConfig({
   testDir: "./tests",
   fullyParallel: false,
-  reporter: "list",
+  reporter: process.env.CI
+    ? [["list"], ["html", { open: "never", outputFolder: "playwright-report" }]]
+    : "list",
   projects: [
     {
       name: "prod",
