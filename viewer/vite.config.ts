@@ -3,6 +3,10 @@ import { svelte } from "@sveltejs/vite-plugin-svelte";
 
 // https://vite.dev/config/
 export default defineConfig({
+  // When deployed to GitHub Pages at https://<user>.github.io/<repo>/
+  // the workflow sets VITE_BASE=/<repo>/ so asset URLs resolve correctly.
+  // Defaults to "/" for local dev and root-hosted deployments.
+  base: process.env.VITE_BASE ?? "/",
   plugins: [
     svelte(),
     // KaitaiStream.js has `require('iconv-lite')` and `require('zlib')`
