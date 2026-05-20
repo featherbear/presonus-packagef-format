@@ -67,7 +67,7 @@ export function parseSkin(buf: ArrayBuffer): SkinPackage {
     trailerSize: parsed.trailer.trailerSize,
     indexOffset: parsed.trailer.indexOffset,
     indexSize: parsed.trailer.indexSize,
-    signature: Array.from(parsed.trailer.signature as Uint8Array)
+    signature: Array.from(parsed.trailer.misc as Uint8Array)
       .map(b => b.toString(16).padStart(2, "0"))
       .join(""),
     fileSize: u8.byteLength,
