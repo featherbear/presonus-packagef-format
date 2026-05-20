@@ -1,0 +1,84 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: viewer
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    outputs:
+      dist-uploaded: ${{ steps.upload-pages.outcome == 'success' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+          cache-dependency-path: viewer/pnpm-lock.yaml
+
+      - name: Setup Java (for kaitai-struct-compiler)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Install kaitai-struct-compiler
+        run: |
+          KSC_VERSION=0.11
+          curl -fsSL -o ksc.zip \
+            "https://github.com/kaitai-io/kaitai_struct_compiler/releases/download/${KSC_VERSION}/kaitai-struct-compiler-${KSC_VERSION}.zip"
+          sudo unzip -q ksc.zip -d /opt
+          sudo ln -s "/opt/kaitai-struct-compiler-${KSC_VERSION}/bin/kaitai-struct-compiler" /usr/local/bin/kaitai-struct-compiler
+          kaitai-struct-compiler --version
+        working-directory: .
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate parser
+        run: pnpm gen-parser
+
+      - name: Install Playwright browsers
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Build
+        run: pnpm build
+
+      - name: Test
+        run: pnpm test
+
+      - name: Upload Pages artifact
+        id: upload-pages
+        if: github.ref == 'refs/heads/master' && github.event_name == 'push'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: viewer/dist
+
+  deploy-pages:
+    if: github.ref == 'refs/heads/master' && github.event_name == 'push'
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
