@@ -3,10 +3,11 @@ import { svelte } from "@sveltejs/vite-plugin-svelte";
 
 // https://vite.dev/config/
 export default defineConfig({
-  // When deployed to GitHub Pages at https://<user>.github.io/<repo>/
-  // the workflow sets VITE_BASE=/<repo>/ so asset URLs resolve correctly.
-  // Defaults to "/" for local dev and root-hosted deployments.
-  base: process.env.VITE_BASE ?? "/",
+  // Emit relative asset URLs (./assets/...) so the same build works whether
+  // the site is hosted at the domain root or under a subpath (e.g. GitHub
+  // Pages at https://<user>.github.io/<repo>/). Paired with <base href="./">
+  // in index.html to anchor those relative URLs to the document location.
+  base: "./",
   plugins: [
     svelte(),
     // KaitaiStream.js has `require('iconv-lite')` and `require('zlib')`

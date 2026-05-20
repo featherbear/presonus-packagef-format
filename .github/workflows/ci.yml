@@ -51,7 +51,7 @@ jobs:
       - name: Install Playwright browsers
         run: pnpm exec playwright install chromium
 
-      - name: Build (for tests, base=/)
+      - name: Build
         run: pnpm build
 
       - name: Test
@@ -66,14 +66,6 @@ jobs:
             viewer/playwright-report
             viewer/test-results
           retention-days: 14
-
-      - name: Build (for Pages, base=/<repo>/)
-        if: github.ref == 'refs/heads/master' && github.event_name == 'push'
-        env:
-          # GitHub Pages serves the project under /<repo>/, so Vite needs
-          # to emit asset URLs prefixed with that path.
-          VITE_BASE: /${{ github.event.repository.name }}/
-        run: pnpm build
 
       - name: Upload Pages artifact
         id: upload-pages
