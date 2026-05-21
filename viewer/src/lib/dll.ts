@@ -15,7 +15,6 @@
  *   https://docs.microsoft.com/en-us/windows/win32/debug/pe-format
  */
 
-const PACKAGEF_MAGIC = 0x46454741_4b434150n; // "PACKAGEF" as little-endian u64 (not used as bigint in comparison, see below)
 const PACKAGEF_BYTES = [0x50, 0x41, 0x43, 0x4b, 0x41, 0x47, 0x45, 0x46]; // "PACKAGEF"
 
 /** A single RCDATA resource that contains a PACKAGEF blob. */
