@@ -203,13 +203,7 @@
   // ---- "Open another" helper -----------------------------------------------
 
   function openAnother() {
-    pkg = null;
-    dllSkins = [];
-    dllName = "";
-    pkgName = "";
-    parseError = "";
-    selectedPath = "";
-    selectedEntry = null;
+    document.getElementById("filepick")?.click();
   }
 </script>
 
@@ -218,10 +212,18 @@
     if (e.target instanceof Element && e.target.closest(".drop")) return;
     if (e.dataTransfer && transferLooksAccepted(e.dataTransfer)) {
       e.preventDefault();
+      e.dataTransfer.dropEffect = "copy";
+      isDragging = "ok";
     }
+  }}
+  ondragleave={(e) => {
+    // Only clear when leaving the window entirely (relatedTarget is null).
+    if (!e.relatedTarget) isDragging = false;
   }}
   ondrop={(e) => {
     if (e.target instanceof Element && e.target.closest(".drop")) return;
+    e.preventDefault();
+    isDragging = false;
     onDrop(e);
   }}
 />
@@ -274,7 +276,7 @@
 
 {:else if showSelector}
   <!-- DLL skin picker -->
-  <div class="selector-wrap">
+  <div class="selector-wrap" class:drag-over={isDragging === "ok"}>
     <SkinSelector
       {dllName}
       skins={dllSkins}
@@ -287,7 +289,7 @@
 
 {:else}
   <!-- Main viewer -->
-  <main>
+  <main class:drag-over={isDragging === "ok"}>
     <aside class="tree-pane">
       <Tree folder={pkg!.root} onSelect={select} {selectedPath} />
     </aside>
