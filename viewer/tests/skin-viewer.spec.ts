@@ -32,7 +32,7 @@ test("app boots without console errors", async ({ page }) => {
   });
 
   await page.goto("/");
-  await expect(page.getByRole("heading", { name: "PreSonus .skin viewer" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "PreSonus .skin file viewer" })).toBeVisible();
   await expect(page.getByText("Drop a")).toBeVisible();
   expect(errors).toEqual([]);
 });
