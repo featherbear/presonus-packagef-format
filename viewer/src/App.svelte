@@ -27,7 +27,7 @@
   // Derived helpers ----------------------------------------------------------
 
   const fileCount = $derived(pkg ? [...walk(pkg.root)].length : 0);
-  const showSelector = $derived(dllSkins.length > 0 && pkg === null);
+  const showSelector = $derived(dllSkins.length > 1 && pkg === null);
 
   // ---- Utilities -----------------------------------------------------------
 
@@ -144,7 +144,15 @@
   function selectSkin(name: string, selected: SkinPackage) {
     pkg = selected;
     pkgName = dllName ? `${dllName} › ${name}` : name;
-    dllSkins = [];
+    selectedPath = "";
+    selectedEntry = null;
+  }
+
+  // Returns true when the current file is a DLL with multiple skins to choose from.
+  const canSwitchSkin = $derived(dllSkins.length > 1 && pkg !== null);
+
+  function switchSkin() {
+    pkg = null;
     selectedPath = "";
     selectedEntry = null;
   }
@@ -242,6 +250,9 @@
       <button class="btn-secondary" onclick={openAnother}>Open another…</button>
     {:else}
       <label class="btn" for="filepick">Open file…</label>
+    {/if}
+    {#if canSwitchSkin}
+      <button class="btn-secondary" onclick={switchSkin}>Switch .skin file…</button>
     {/if}
     <input id="filepick" type="file" accept=".skin,.dll" onchange={onFilePicked} hidden />
     <button onclick={downloadAllZip} disabled={!pkg || buildingZip}>
