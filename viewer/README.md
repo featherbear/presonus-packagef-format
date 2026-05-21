@@ -8,6 +8,7 @@ Everything runs locally - files you drop in never leave your machine.
 ## Features
 
 - Drop a `.skin` file (or use the picker) to parse it in-browser.
+- Drop a `.dll` file to extract and browse embedded `.skin` files - useful for Windows installations where `.skin` files are embedded as DLL resources rather than exposed as standalone files on the filesystem.
 - Browse the folder tree extracted from the package index.
 - Preview images (PNG/SVG), text/XML, and a hex dump for anything else.
 - Download individual files or the whole package as a zip.
